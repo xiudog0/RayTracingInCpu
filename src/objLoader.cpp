@@ -258,12 +258,11 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 					));
 				}
 
-
-
-				// if it is  a light
+				// if obj is a light
 				if (floatMax(materials[matid].emission) != 0 || floatMax(materials[matid].ambient) > 1)
 				{
-					if (objects.back()->getArea() > 1)
+					// if obj is bright enough or big erough
+					if (objects.back()->getArea() > 1 || floatMax(materials[objects.back()->mat_id].emission)>20)
 						lightObjects.push_back(objects.back());
 				}
 			}
@@ -510,7 +509,7 @@ bool readArrFromFile(const int modelSelect, Vec c[], int& spp, const int width, 
 	file.read(reinterpret_cast<char*>(c), width * height * sizeof(Vec));
 	file.close();
 
-	std::cout << "read data file success! now spp:" << spp << std::endl;
+	std::cout << "read data file success! now spp:" << spp*4 << std::endl;
 	return true;
 }
 

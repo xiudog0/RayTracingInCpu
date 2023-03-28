@@ -11,6 +11,7 @@ struct Vec {
 
 	Vec(float x = 0, float y = 0, float z = 0) : x(x), y(y), z(z) {}
 	Vec(float v[]) : x(v[0]), y(v[1]), z(v[2]) {}
+	Vec(const float v[]) : x(v[0]), y(v[1]), z(v[2]) {}
 	Vec operator+(const Vec& v) const { return Vec(x + v.x, y + v.y, z + v.z); }
 	Vec operator+(const float v[]) const { return Vec(x + v[0], y + v[1], z + v[2]); }
 	Vec operator-(const Vec& v) const { return Vec(x - v.x, y - v.y, z - v.z); }
@@ -28,7 +29,7 @@ struct Ray {
 	Vec origin;
 	Vec direction;
 	float tMin, tMax;
-	Ray(const Vec& origin = { 0,0,0 }, const Vec& direction = { 0,0,0 }, float tMin = 0, float tMax = 1e10)
+	Ray(const Vec& origin = { 0,0,0 }, const Vec& direction = { 0,0,0 }, float tMin = 1e-6, float tMax = 1e10)
 		: origin(origin), direction(direction), tMin(tMin), tMax(tMax) {}
 	// 计算光线上距离原点为t的点
 	Vec at(float t) const { return origin + direction * t; }
@@ -86,13 +87,13 @@ public:
 	// computer the intersection
 	virtual bool intersect(const Ray& ray, Intersection& intersection) = 0;
 	// while it is a light object, sample it from a intersection
-	virtual float sampleLight(Vec point, BVHTree& bvh) = 0;
+	virtual float sampleLight(const Vec& point, const BVHTree& bvh) = 0;
 
 	virtual float getArea() = 0;
 
 	virtual objectType getType() = 0;
 
-	virtual Vec getTextureByPoint(Vec point) = 0;
+	virtual Vec getTextureByPoint(const Vec& point) = 0;
 
 	int mat_id; // material id
 	Texture* texture;
@@ -119,9 +120,9 @@ public:
 
 	virtual AABB getBoundingBox()override;
 	virtual bool intersect(const Ray& ray, Intersection& intersection) override;
-	virtual float sampleLight(Vec point, BVHTree& bvh) override;
+	virtual float sampleLight(const Vec& point, const BVHTree& bvh) override;
 	virtual float getArea() override;
-	virtual Vec getTextureByPoint(Vec point) override;
+	virtual Vec getTextureByPoint(const Vec& point) override;
 	objectType getType() override { return objectType::sph; }
 };
 
@@ -143,9 +144,9 @@ public:
 
 	virtual AABB getBoundingBox()override;
 	virtual bool intersect(const Ray& ray, Intersection& intersection) override;
-	virtual float sampleLight(Vec point, BVHTree& bvh) override;
+	virtual float sampleLight(const Vec& point, const BVHTree& bvh) override;
 	virtual float getArea()override;
-	virtual Vec getTextureByPoint(Vec point) override;
+	virtual Vec getTextureByPoint(const Vec& point) override;
 
 	virtual objectType getType() override { return objectType::tri; }
 };

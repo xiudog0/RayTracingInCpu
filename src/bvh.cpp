@@ -108,7 +108,7 @@ bool BVHTree::intersect(const Ray& ray, Intersection& intersection) const {
 			//printf("leaf\n");
 			Intersection temp;
 			if (node->object->intersect(ray, temp)) {
-				if (temp < intersection && temp.t >1e-3) {
+				if (temp < intersection&& temp.t > ray.tMin) {
 					intersection = temp;
 					hit = true;
 				}
@@ -199,7 +199,7 @@ bool Triangle::intersect(const Ray& ray, Intersection& intersection)
 	return true;
 }
 
-float Triangle::sampleLight(Vec point, BVHTree& bvh)
+float Triangle::sampleLight(const Vec& point, const BVHTree& bvh)
 {
 
 	// get a random point
@@ -232,7 +232,7 @@ float Triangle::sampleLight(Vec point, BVHTree& bvh)
 	double area = 0.5 * e01.cross(e02).length();
 	float cos = std::abs(line.normalized().dot(inte.normal));
 
-	return area * cos / distance;
+	return area * cos / distance ;
 }
 
 float Triangle::getArea()
@@ -243,7 +243,7 @@ float Triangle::getArea()
 	return 0.5f * cross_product.length();
 }
 
-Vec Triangle::getTextureByPoint(Vec point)
+Vec Triangle::getTextureByPoint(const Vec& point)
 {
 	if (texture == nullptr)
 		return Vec(1, 1, 1);
@@ -327,14 +327,13 @@ bool Sphere::intersect(const Ray& ray, Intersection& intersection) {
 	return true;
 }
 
-float Sphere::sampleLight(Vec point, BVHTree& bvh)
+float Sphere::sampleLight(const Vec& point, const BVHTree& bvh)
 {
 	// get a random point
 	float phi = PI * floatrand();
 	float sinPhi = std::sin(phi);
 	float theta = 2 * PI * floatrand();
 	Vec randPoint = center + Vec(sinPhi * std::cos(theta), sinPhi * std::sin(theta), std::cos(phi)) * radius;
-	float _aaaa = (randPoint - center).length();
 	Intersection inte;
 	// a line from object to interction
 	Vec line = point - randPoint;
@@ -343,7 +342,7 @@ float Sphere::sampleLight(Vec point, BVHTree& bvh)
 	if (bvh.intersect(Ray(point, (line * -1.).normalized()), inte) == false)
 		return 0;
 	
-	if (std::abs((inte.point - center).length() - radius) < 1e-3)
+	if (std::abs((inte.point - center).length() - radius) < 1e-6)
 		return 0;
 
 	float distance = line.length();
@@ -351,15 +350,15 @@ float Sphere::sampleLight(Vec point, BVHTree& bvh)
 	float area = PI * radius * radius;
 	float cos = line.normalized().dot(inte.normal);
 
-	return area * cos / (distance * 2 * PI);
+	return area * cos / distance ;
 }
 
 float Sphere::getArea()
 {
-	return 105;
+	return 4.0f * PI *radius *radius*radius /3.0f;
 }
 
-Vec Sphere::getTextureByPoint(Vec point)
+Vec Sphere::getTextureByPoint(const Vec& point)
 {
 	return Vec(1,1,1);
 }
