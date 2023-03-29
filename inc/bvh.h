@@ -1,10 +1,11 @@
 #pragma once
+#include "third/tinyobjloader/tiny_obj_loader.h"
 #include <cmath>
 #include <vector>
 
-
 constexpr float PI = 3.1415926;
 inline float floatrand(float max = 1) { return max * static_cast <float> (rand()) / static_cast <float> (RAND_MAX); }
+inline float floatMax(const float f3[]) { return std::max(std::max(f3[0], f3[1]), f3[2]); }
 
 struct Vec {
 	float x, y, z;
@@ -21,9 +22,12 @@ struct Vec {
 	float dot(const Vec& v) const { return x * v.x + y * v.y + z * v.z; }
 	Vec cross(const Vec& v) const { return Vec(y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x); }
 	Vec mult(const float f[]) const { return Vec(x * f[0], y * f[1], z * f[2]); }
+	Vec mult(const Vec f) const { return Vec(x * f[0], y * f[1], z * f[2]); }
 	float length() const { return sqrt(x * x + y * y + z * z); }
 	Vec normalized() const { float len = length(); return Vec(x / len, y / len, z / len); }
 };
+
+inline float vecMax(const Vec& v) { return std::max(std::max(v.x, v.y), v.z); }
 
 struct Ray {
 	Vec origin;
@@ -61,13 +65,13 @@ class Object;
 
 struct Intersection {
 	float t; // 光线参数
-	int matId; // 交点所在的材质id
+	tinyobj::material_t* material;
 	Object* object;
 	Vec point; // 交点位置
 	Vec normal; // 交点处的法向量
 
 	// 默认构造函数
-	Intersection() : t(INFINITY), matId(-1), object(nullptr) {}
+	Intersection() : t(INFINITY), material(nullptr), object(nullptr) {}
 
 	// 交点比较函数，用于排序
 	bool operator<(const Intersection& other) const { return t < other.t; }
@@ -95,7 +99,7 @@ public:
 
 	virtual Vec getTextureByPoint(const Vec& point) = 0;
 
-	int mat_id; // material id
+	tinyobj::material_t* material;
 	Texture* texture;
 };
 
@@ -105,15 +109,15 @@ public:
 	Vec center;
 	float radius;
 
-	Sphere(float f[3], float r, int mid, bool comArea = false) :
+	Sphere(float f[3], float r, tinyobj::material_t* mat, bool comArea = false) :
 		center(f), radius(r) {
-		mat_id = mid;
+		material = mat;
 		texture = nullptr;
 	}
 
-	Sphere(const Vec v, float r, int mid, bool comArea = false) :
+	Sphere(const Vec v, float r, tinyobj::material_t* mat, bool comArea = false) :
 		center(v), radius(r) {
-		mat_id = mid;
+		material = mat;
 		texture = nullptr;
 	}
 
@@ -130,15 +134,15 @@ class Triangle : public Object {
 public:
 	Vec v0, v1, v2;
 	Vec uv0, uv1, uv2;
-	Triangle(float f0[3], float f1[3], float f2[3],Vec uvv0,Vec uvv1,Vec uvv2, int mid, Texture* tex = nullptr) :
+	Triangle(float f0[3], float f1[3], float f2[3],Vec uvv0,Vec uvv1,Vec uvv2, tinyobj::material_t* mat, Texture* tex = nullptr) :
 		v0(f0), v1(f1), v2(f2), uv0(uvv0), uv1(uvv1), uv2(uvv2) {
-		mat_id = mid;
+		material = mat;
 		texture = tex;
 	}
 
-	Triangle(const Vec& v0, const Vec& v1, const Vec& v2, int mid) :
+	Triangle(const Vec& v0, const Vec& v1, const Vec& v2,tinyobj::material_t* mat) :
 		v0(v0), v1(v1), v2(v2){
-		mat_id = mid;
+		material = mat;
 		texture = nullptr;
 	}
 
@@ -147,6 +151,7 @@ public:
 	virtual float sampleLight(const Vec& point, const BVHTree& bvh) override;
 	virtual float getArea()override;
 	virtual Vec getTextureByPoint(const Vec& point) override;
+	Vec getNormal() { return (v1 - v0).cross(v2 - v0).normalized(); }
 
 	virtual objectType getType() override { return objectType::tri; }
 };

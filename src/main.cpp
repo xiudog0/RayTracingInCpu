@@ -1,6 +1,7 @@
 #pragma once
 #include "objLoader.h"
 
+#include <math.h>
 int DEBUG = 1;
 /*
 * DONE:
@@ -12,30 +13,26 @@ int DEBUG = 1;
 * TODO:
 *   illum:
 */
-inline Vec sampleAllLight(const Vec& Point, const BVHTree& bvh, const std::vector<Object*>& lightObjects, const std::vector<tinyobj::material_t>& materials) {
+inline Vec sampleAllLight(const Ray& r, const BVHTree& bvh, const std::vector<Object*>& lightObjects) {
 	Vec ret;
 	for (auto obj : lightObjects)
 	{
-		float sampleLight = obj->sampleLight(Point, bvh);
-
-		if (sampleLight > 1e-6)
-		{
-			float objMatid = obj->mat_id;
-			auto& objAmbient = materials[objMatid].ambient;
-			auto& objEmission = materials[objMatid].emission;
-			ret = ret + (Vec(materials[objMatid].ambient) + materials[objMatid].emission) * sampleLight;
-		}
+		float sampleLight = obj->sampleLight(r.origin + r.direction * 1e-3, bvh);
+		auto objMat = obj->material;
+		auto& objAmbient = objMat->ambient;
+		auto& objEmission = objMat->emission;
+		ret = ret + (Vec(objMat->ambient) + objMat->emission) * sampleLight;
 	}
 	return ret;
 }
 
-inline float caculatePdf(Intersection& intersection, Object* lightObject, std::vector<tinyobj::material_t>& materials)
+inline float caculatePdf(Intersection& intersection, Object* lightObject)
 {
 
 	float area = lightObject->getArea();
-	float avergEmission = (materials[lightObject->mat_id].emission[0] +
-		materials[lightObject->mat_id].emission[1] +
-		materials[lightObject->mat_id].emission[2]
+	float avergEmission = (lightObject->material->emission[0] +
+		lightObject->material->emission[1] +
+		lightObject->material->emission[2]
 		) / 3.0f;
 	float dis;
 	float cos;
@@ -58,16 +55,16 @@ inline float caculatePdf(Intersection& intersection, Object* lightObject, std::v
 }
 
 
-Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightObjects, std::vector<tinyobj::material_t>& materials) {
+Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightObjects) {
 
 	Vec ret;
 	Intersection intersection;
 
-	if (++depth > 5)
+	if (++depth > 3)
 	{
-		if (depth > 7 || floatrand() > 0.8)
+		if (depth > 5 || floatrand() > 0.5)
 		{
-			return ret + sampleAllLight(r.origin, bvh, lightObjects, materials);
+			return ret + sampleAllLight(r, bvh, lightObjects);
 		}
 	}
 
@@ -76,51 +73,48 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		// sampling the light
 		if (depth != 1)
 		{
-			ret = ret + sampleAllLight(r.origin, bvh, lightObjects, materials);
+			ret = ret + sampleAllLight(r, bvh, lightObjects);
 		}
 		return ret;
 	}
 
-	int matid = intersection.matId;
-	auto& diffuse = materials[matid].diffuse;
+	auto material = intersection.material;
 
-	auto& ambient = materials[matid].ambient;
-	auto& specular = materials[matid].specular;
-	auto& emission = materials[matid].emission;
-	auto& transmittance = materials[matid].transmittance;
-	auto dissolve = materials[matid].dissolve;
-	auto shininess = materials[matid].shininess;
 
-	float ambientMax = floatMax(ambient);
-	float diffuseMax = floatMax(diffuse);
-	float specularMax = floatMax(specular);
-	float emissionMax = floatMax(emission);
-	float transmittanceMax = floatMax(transmittance);
+	const auto& ambient = material->ambient;
+	const auto& emission = material->emission;
+	const auto& transmittance = material->transmittance;
+	const auto dissolve = material->dissolve;
+	const auto shininess = material->shininess;
+	const auto& specular = material->specular;
+	const float specularMax = floatMax(specular);
+	const float ambientMax = floatMax(ambient);
+	const float emissionMax = floatMax(emission);
+	const float transmittanceMax = floatMax(transmittance);
 
 	ret = Vec(emission) + ambient;
 
-
 	// stop if hit the light
 	if (emissionMax != 0 || ambientMax > 1.0)
-	{
 		return ret;
-	}
 
 	Vec n = intersection.normal;
 	Vec nl = n.dot(r.direction) < 0 ? n : n * -1;
 
 	// reflect probality reflectance
 	Vec refelDir = (r.direction - n * 2 * n.dot(r.direction)).normalized();
+
 	if (transmittanceMax != 0)
 	{
 		bool into = r.direction.dot(n) < 0 ? true : false;
-		float ior = materials[matid].ior;
-		float nnt = into ? 1 / ior : ior;
+		float ior = material->ior;
+		float nnt = into ? 1.0f / ior : ior;
 		float ddn = r.direction.dot(nl);
-		float cos2t = 1 - ior * ior * (1 - ddn * ddn);	
+		float cos2t = 1.0f - nnt * nnt * (1.0f - ddn * ddn);
+
 		if (cos2t < 0)
 		{
-			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects, materials).mult(specular);
+			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects).mult(specular);
 		}
 
 		Vec transDir = (r.direction * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t)))).normalized();
@@ -128,31 +122,32 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		float fresnel = R0 + (1 - R0) * c * c * c * c * c;
 		float transmitProbability = 1 - fresnel;
 
-		float Tr = 1 - fresnel, P = .25 + .5 * fresnel, RP = fresnel / P, TP = Tr / (1 - P);
-		if (floatrand() < transmitProbability)
-		{	
+		float TransmitProb = 1 - fresnel, P = .25 + .5 * fresnel, RP = fresnel / P, TP = TransmitProb / (1 - P);
+
+		if (floatrand() < TransmitProb)
+		{
 			float recipTransProb = (transmitProbability != 0.0f ? 1. / transmitProbability : 1e-6);
-			return ret + radiance(Ray(intersection.point, transDir), depth, bvh, lightObjects, materials).mult(transmittance) * TP;
+			return ret + radiance(Ray(intersection.point, transDir), depth, bvh, lightObjects).mult(transmittance) * TP;
 		}
 		else
 		{
 			float recipReflectProb = (fresnel != 0.0f ? 1. / fresnel : 1e-6);
-			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects, materials).mult(specular) * RP;
+			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects).mult(specular) * RP;
 		}
 	}
 
+	auto diffuse = Vec(material->diffuse);
+	float diffuseMax = vecMax(diffuse);
+	if (intersection.object->texture != nullptr)
+	{
+		auto  texture = intersection.object->getTextureByPoint(intersection.point);
+		diffuse = diffuse.mult(texture);
+	}
 	float diffuseProbability = diffuseMax / (diffuseMax + specularMax);
 
-	if (floatrand() < diffuseProbability)
+	if (specularMax == 0 || floatrand() < diffuseProbability)
 	{
-		//diffuse
-		if (intersection.object->texture != nullptr)
-		{
-			auto  texture = intersection.object->getTextureByPoint(intersection.point);
-			diffuse[0] = texture.x;
-			diffuse[1] = texture.y;
-			diffuse[2] = texture.z;
-		}
+
 		// w,u,v is perpendicular to each other
 		Vec w = nl;
 		Vec u = ((fabs(w.x) > .1 ? Vec(0, 1) : Vec(1)).cross(w)).normalized();
@@ -164,7 +159,7 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		// a random reflection ray
 		Vec randDir = u * std::cos(theta) * sinphi + v * std::sin(theta) * sinphi + w * std::cos(phi);
 		float recipDiffProb = (diffuseProbability != 0.0f ? 1. / diffuseProbability : 0.);
-		ret = ret + radiance(Ray(intersection.point, randDir), depth, bvh, lightObjects, materials).mult(diffuse) * recipDiffProb;
+		ret = ret + radiance(Ray(intersection.point, randDir), depth, bvh, lightObjects).mult(diffuse) * recipDiffProb;
 
 	}
 	else
@@ -174,21 +169,18 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		// probality of Sample this light
 		float pdf = 0;
 		/*
-		pdf = caculatePdf(intersection, lightObjects[lightObj], materials);
-		ret = ret + sampleAllLight(intersection.point, bvh, lightObjects, materials)*pdf;
+		pdf = caculatePdf(intersection, lightObjects[lightObj]);
+		ret = ret + sampleAllLight(Ray(intersection.point,intersection.direction), bvh, lightObjects)*pdf;
 		*/
 		// perpendicular to each other
-		Vec refelDir = (r.direction - n * 2 * n.dot(r.direction)).normalized();
 		Vec refelRandDir;
-
 		//Bsdf
 		Vec u = ((fabs(refelDir.x) > .1 ? Vec(0, 1) : Vec(1)).cross(refelDir)).normalized();
 		Vec v = refelDir.cross(u).normalized();
 		float theta = floatrand(2) * PI;
 		refelRandDir = (refelDir + (u * std::cos(theta) + v * std::sin(theta)) * floatrand(0.2)).normalized();
 		float recipSpecProb = 1.0 / (1.0 - diffuseProbability);
-		Vec radi = radiance(Ray(intersection.point, refelRandDir), depth, bvh, lightObjects, materials) * recipSpecProb;
-
+		Vec radi = radiance(Ray(intersection.point, refelRandDir), depth, bvh, lightObjects) * recipSpecProb;
 		// if(1.0f - pdf >1e-6)
 		ret = ret + radi.mult(specular) * std::pow(refelRandDir.dot(refelDir), shininess);
 	}
@@ -216,7 +208,7 @@ int main(int argc, char* argv[]) {
 	// --------------------------------debug setting-------------------------------------
 	modelSelect = 3;
 	detailPrint = 1;
-	samps = 128;
+	samps = 1024;
 
 	if (!objLoader(modelSelect, shapes, materials, detailPrint) ||
 		!xmlCameraAndCorrectMaterial(modelSelect, w, h, fovy, cam, camUp, materials, detailPrint))
@@ -234,10 +226,8 @@ int main(int argc, char* argv[]) {
 			objects.size(), maxdepth, static_cast<float>(alldepth) / static_cast<float>(objects.size()));
 	}
 	objects.resize(0);
-
-
-	w /= 2;
-	h /= 2;
+	w /= 16;
+	h /= 16;
 
 	// xyz increment;
 	Vec cyIncure, cxIncure, czIncure;
@@ -254,64 +244,103 @@ int main(int argc, char* argv[]) {
 	}
 
 	Vec* c = new Vec[w * h];
-	float spp = 4 * samps;
+	float spp = 1 * samps;
 	float recipSpp = 1.0 / spp;
 
-	int s = 0;
-	//readArrFromFile(modelSelect, c, s, w, h);
+	int s = 1;
 
+	//srand(0);
+	if (0)
+		if (readArrFromFile(modelSelect, c, s, w, h))
+			printf("Rendering begin with read data file! now spp: %d \n", s);
+		else
+			printf("Rendering begin!!!! \n");
+
+	DEBUG = 0;
 	int xmin = 0, xmax = w, ymin = 0, ymax = h;
 	if (DEBUG) {
-		xmin = w * 3 / 8 - w/16;
-		xmax = w / 2 + w/16;
-		ymax = h / 2 + h/8;
+		/*
+		xmin = w / 2 - w / 16;
+		xmax = w / 2 + w / 16;
+		*/
+
+		xmin = w / 2;
+		xmax = w / 2 + w / 4;
+		ymax = h / 4;
 	}
 
-	for (; s < samps; s++) {
-		printf("\nRendering (%.0f spp) %5.2f%%", spp, 100. * s / (samps));
-#pragma omp parallel for
+	for (s; s <= samps; s++) {
+		if (s % 4 == 0) {
+			printf("Rendering (%.0f spp) %5.2f%%", spp, 100. * s / (samps));
+			// save file  per 16 spp;
+			if (s % 16 == 0) {
+				writeArrToFile(modelSelect, c, s, w, h);
+				save_bitmap(modelSelect, c, w, h,static_cast<float>(s)/ static_cast<float>(samps));
+			}
+			printf("\n");
+		}
+		//#pragma omp parallel for
 		for (int y = 0; y < h; y++) {
-			if (y > ymax && DEBUG)
-				break;
-			for (int x = 0; x < w; x++) {
-				if (x < xmin && DEBUG)
-					x = xmin;
-				else if (x > xmax && DEBUG)
+			/*
+			if (s != 0) {
+				if (y > ymax)
 					break;
-
+			}
+			*/
+			for (int x = 0; x < w; x++) {
+				/*
+				if (s != 1) {
+					if (x < xmin)
+						x = xmin;
+					else if (x > xmax)
+						break;
+				}
+				
+				
+				if ((x != 205 || y != h - 145 - 1))
+				{
+					int a = 0;
+				}
+				if (s == 165)
+				{
+					int a = 0;
+				}
+				*/
+				float r1 = floatrand(2);
+				float r2 = floatrand(2);
+				float dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
+				float dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
+				Vec d = cxIncure * ((dx + .5) / 2 + x - w / 2) +
+					cyIncure * ((dy + .5) / 2 + y - h / 2) + czIncure;
 				Vec r;
-				for (int sy = 0; sy < 2; sy++) {
-					// 2x2 subpixel rows
-					for (int sx = 0; sx < 2; sx++) {
+				r = r + radiance(Ray(cam.origin + d, d.normalized()), 0, bvh, lightObjects);
 
-						float r1 = 2 * floatrand();
-						float r2 = 2 * floatrand();
-						float dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
-						float dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
-						Vec d = cxIncure * ((sx + dx + .5) / 2 + x - w / 2) +
-							cyIncure * ((sy + dy + .5) / 2 + y - h / 2) + czIncure;
-						r = r + radiance(Ray(cam.origin + d, d.normalized()), 0, bvh, lightObjects, materials);
-					}
+				if (std::fpclassify(r.x) > 0 || std::fpclassify(r.y) > 0 || std::fpclassify(r.z) > 0)
+				{
+					printf("go wrong spp:%d, %7f %7f %7f------\n", s, r.x, r.y, r.z);
 				}
 
-				int i = y * w + x;
-
-				if (s == 0 && c[i].x == 0.0)
-					c[i] = r * 0.25;
-				else
-					c[i] = (c[i] * (spp - 4.0f) + r) * recipSpp;
+				c[y * w + x] = c[y * w + x]  + r*recipSpp;
 			}
 		}
-
-		// save file  per 16 spp;
-		if (s % 4 == 0) {
-			writeArrToFile(modelSelect, c, s, w, h);
-			save_bitmap(modelSelect, c, w, h);
-		}
-
 	}
 
+	/*
+	float cmax = -1e10;
+	float cmin = 1e10;
+	for (int y = 0; y < w; y++) {
+		for (int x = 0; x < w; x++)
+		{
+			int i = y * w + x;
+			if (vecMax(c[i]) > cmax)
+				cmax = vecMax(c[i]);
+			if (std::min(std::min(c[i].x, c[i].y), c[i].z) < cmin)
+				cmin = std::min(std::min(c[i].x, c[i].y), c[i].z);
 
+		}
+	}
+	printf("min:%7f------max:%7f \n", cmin, cmax);
+	*/
 	save_bitmap(modelSelect, c, w, h);
 
 	return 0;

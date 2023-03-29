@@ -18,7 +18,7 @@ bool xmlCameraAndCorrectMaterial(int modelSelect, int& width, int& height, float
 	if (modelSelect == 1) filename = "./scenes/cornell-box/cornell-box.xml";
 	else if (modelSelect == 2)filename = "./scenes/veach-mis/veach-mis.xml";
 	else if (modelSelect == 3)filename = "./scenes/staircase/staircase.xml";
-	else if (modelSelect == 4)filename = "./scenes/cornell-box/cornell-box.xml";
+	else if (modelSelect == 4)filename = "./scenes/test/test.xml";
 	else  return false;
 
 	if (filename == nullptr)
@@ -31,7 +31,6 @@ bool xmlCameraAndCorrectMaterial(int modelSelect, int& width, int& height, float
 	{
 		xmlText += line;
 	}
-
 	Vec eye, target, up;
 	File.close();
 
@@ -135,7 +134,7 @@ bool objLoader(int modelSelect,
 	}
 	else if (modelSelect == 4)
 	{
-		loadObj("./scenes/cornellBoxTest/cornell_box.obj", shapes, materials, "./scenes/cornellBoxTest/", detailPrint);
+		loadObj("./scenes/test/test.obj", shapes, materials, "./scenes/test/", detailPrint);
 	}
 	else
 	{
@@ -245,7 +244,7 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 0] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 0] + 1]),
 						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 1] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 1] + 1]),
 						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 2] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 2] + 1]),
-						matid, t
+						&materials[matid], t
 					));
 				}
 				else
@@ -254,7 +253,7 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 						&mesh.positions[3 * mesh.indices[3 * f + 0]],
 						&mesh.positions[3 * mesh.indices[3 * f + 1]],
 						&mesh.positions[3 * mesh.indices[3 * f + 2]],
-						matid
+						&materials[matid]
 					));
 				}
 
@@ -262,7 +261,7 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 				if (floatMax(materials[matid].emission) != 0 || floatMax(materials[matid].ambient) > 1)
 				{
 					// if obj is bright enough or big erough
-					if (objects.back()->getArea() > 1 || floatMax(materials[objects.back()->mat_id].emission)>20)
+					if (objects.back()->getArea() > 1 || floatMax(objects.back()->material->emission)>20)
 						lightObjects.push_back(objects.back());
 				}
 			}
@@ -270,9 +269,9 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 
 		if (mlight)
 		{
-			objects.push_back(new Sphere(Vec(0.0, 6.5, 2.7), 0.05, 5));
-			objects.push_back(new Sphere(Vec(0.0, 6.5, 0.0), 0.5, 6));
-			objects.push_back(new Sphere(Vec(0.0, 6.5, -2.8), 1, 7));
+			objects.push_back(new Sphere(Vec(0.0, 6.5, 2.7), 0.05, &materials[5]));
+			objects.push_back(new Sphere(Vec(0.0, 6.5, 0.0), 0.5, &materials[6]));
+			objects.push_back(new Sphere(Vec(0.0, 6.5, -2.8), 1, &materials[7]));
 			lightObjects.push_back(objects[objects.size() - 1]);
 			lightObjects.push_back(objects[objects.size() - 2]);
 			lightObjects.push_back(objects[objects.size() - 3]);
@@ -297,11 +296,11 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 					normal.x, normal.y, normal.z
 				);
 
-				printf("object[%zd]: (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f); material_id:%d ;bound_box: (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f)\n", i,
+				printf("object[%zd]: (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f);\tmat:%s ;bound_box: (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f)\n", i,
 					tri->v0.x, tri->v0.y, tri->v0.z,
 					tri->v1.x, tri->v1.y, tri->v1.z,
 					tri->v2.x, tri->v2.y, tri->v2.z,
-					tri->mat_id,
+					tri->material->name.c_str(),
 					box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z
 				);
 				if (static_cast<Triangle*>(objects[i])->texture != nullptr)
@@ -318,12 +317,12 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 			}
 			else {
 				auto box = (objects[i])->getBoundingBox();
-				printf("object[%zd]: ---sphere--- center (%6.2f,%6.2f,%6.2f) ,radius:%6.2f, material_id:%d ;bound_box: (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f)\n", i,
+				printf("object[%zd]: ---sphere--- center (%6.2f,%6.2f,%6.2f) ,radius:%6.2f,\tmat:%s ;bound_box: (%6.2f,%6.2f,%6.2f), (%6.2f,%6.2f,%6.2f)\n", i,
 					static_cast<Sphere*> (objects[i])->center.x,
 					static_cast<Sphere*> (objects[i])->center.y,
 					static_cast<Sphere*> (objects[i])->center.z,
 					static_cast<Sphere*> (objects[i])->radius,
-					static_cast<Sphere*> (objects[i])->mat_id,
+					static_cast<Sphere*> (objects[i])->material->name.c_str(),
 					box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z
 				);
 			}
@@ -502,20 +501,18 @@ bool readArrFromFile(const int modelSelect, Vec c[], int& spp, const int width, 
 
 	std::ifstream file(filename, std::ios::binary);
 	if (!file) {
-		std::cerr << "can't open" << filename << std::endl;
 		return false;
 	}
 	file.read(reinterpret_cast<char*>(&spp), sizeof(spp));
 	file.read(reinterpret_cast<char*>(c), width * height * sizeof(Vec));
 	file.close();
 
-	std::cout << "read data file success! now spp:" << spp*4 << std::endl;
 	return true;
 }
 
 
 
-void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height) {
+void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height,float completePercent) {
 
 
 	std::string filename;
@@ -524,6 +521,7 @@ void save_bitmap(const int modelSelect, const Vec c[], const int width, const in
 	else if (modelSelect == 3) filename = "Astaircase.bmp";
 	else if (modelSelect == 4) filename = "Atest.bmp";
 	else filename = "unclear_image.bmp";
+
 
 	std::ofstream file(filename, std::ios::binary);
 	if (!file) {
@@ -540,11 +538,15 @@ void save_bitmap(const int modelSelect, const Vec c[], const int width, const in
 	bitmap.info_header.bit_count = 24;
 	bitmap.data = new uint8_t[width * height * 3];
 
+	float recipCP = 1 / completePercent;
+
 	for (int i = 0; i < width * height; ++i) {
-		bitmap.data[i * 3 + 0] = (toInt(c[i].z)) & 0xFF;
-		bitmap.data[i * 3 + 1] = (toInt(c[i].y)) & 0xFF;
-		bitmap.data[i * 3 + 2] = (toInt(c[i].x)) & 0xFF;
+		bitmap.data[i * 3 + 0] = (toInt(c[i].z * recipCP)) & 0xFF;
+		bitmap.data[i * 3 + 1] = (toInt(c[i].y * recipCP)) & 0xFF;
+		bitmap.data[i * 3 + 2] = (toInt(c[i].x * recipCP)) & 0xFF;
 	}
+
+	
 
 	file.write(reinterpret_cast<char*>(&bitmap.file_header), sizeof(BitmapFileHeader));
 	file.write(reinterpret_cast<char*>(&bitmap.info_header), sizeof(BitmapInfoHeader));

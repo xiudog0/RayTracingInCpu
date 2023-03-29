@@ -3,7 +3,7 @@
 #include "bvh.h"
 #include "third/tinyobjloader/tiny_obj_loader.h"
 
-inline float floatMax(const float f3[]) { return std::max(std::max(f3[0], f3[1]), f3[2]); }
+
 inline float clamp(float x) { return x < 0 ? 0 : x>1 ? 1 : x; }
 inline Vec clamp(Vec v) {
 	return Vec(v.x < 0 ? 0 : v.x>1 ? 1 : v.x,
@@ -69,4 +69,4 @@ void writeArrToFile(const int modelSelect, const Vec c[], const int spp, const i
 
 bool readArrFromFile(const int modelSelect, Vec c[], int& spp, const int width, const int height);
 
-void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height);
+void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height, float completePercent = 1.0);

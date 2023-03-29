@@ -105,12 +105,21 @@ bool BVHTree::intersect(const Ray& ray, Intersection& intersection) const {
 
 		if (node->isLeaf) {
 			// 如果是叶节点，检查光线是否与对象相交
-			//printf("leaf\n");
 			Intersection temp;
 			if (node->object->intersect(ray, temp)) {
-				if (temp < intersection&& temp.t > ray.tMin) {
-					intersection = temp;
-					hit = true;
+				
+				// if two face conplane but temp is a light
+				if (abs(intersection.t - temp.t) < 1e-3&& temp.t) {
+					if (floatMax(temp.material->emission) > floatMax(intersection.material->emission)) {
+						intersection = temp;
+						hit = true;
+						continue;
+					}
+				}
+				// 1e-3 ensure the ray go out a triangle
+				else if (temp.t < intersection.t  && temp.t> 1e-3) {
+						intersection = temp;
+						hit = true;
 				}
 			}
 		}
@@ -191,7 +200,7 @@ bool Triangle::intersect(const Ray& ray, Intersection& intersection)
 
 	// 更新Intersection对象的信息
 	intersection.t = t_hit;
-	intersection.matId = this->mat_id;
+	intersection.material = this->material;
 	intersection.point = ray.at(t_hit);
 	intersection.normal = e1.cross(e2).normalized();
 	intersection.object = this;
@@ -222,8 +231,9 @@ float Triangle::sampleLight(const Vec& point, const BVHTree& bvh)
 	//not hit
 	if (bvh.intersect(Ray(point, (line * -1.0).normalized()), inte) == false)
 		return 0;
-	float a = (inte.point - point).length();
-	if(	(inte.point - randPoint).length() > 1e-6)
+	//float a = (inte.point - randPoint).length();
+
+	if(	(inte.point - randPoint).length() > 1e-3)
 		return 0.0f;
 
 
@@ -259,19 +269,17 @@ Vec Triangle::getTextureByPoint(const Vec& point)
 
 	float w0 = (d11 * d20 - d01 * d21) / denom;
 	float w1 = (d00 * d21 - d01 * d20) / denom;
+
 	float w2 = 1.0f - w0 - w1;
 
 	// 计算纹理坐标
 	float u = w0 * uv0.x + w1 * uv1.x + w2 * uv2.x;
 	float v = w0 * uv0.y + w1 * uv1.y + w2 * uv2.y;
 
-
-
 	int w = texture->w;
 	int x = u * w;
 	int y = v * texture->h;
-
-
+	
 	return Vec(
 		texture->photo[texture->c * (x + y * w) + 0],
 		texture->photo[texture->c * (x + y * w) + 1],
@@ -321,9 +329,8 @@ bool Sphere::intersect(const Ray& ray, Intersection& intersection) {
 
 	intersection.point = ray.origin + ray.direction * intersection.t;
 	intersection.normal = (intersection.point - center).normalized();
-	intersection.matId = this->mat_id;
+	intersection.material = this->material;
 	intersection.object = this;
-
 	return true;
 }
 
