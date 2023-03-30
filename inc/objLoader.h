@@ -65,8 +65,14 @@ struct Bitmap {
 };
 #pragma pack(pop)
 
-void writeArrToFile(const int modelSelect, const Vec c[], const int spp, const int width, const int height);
+void writeArrToFile(const int modelSelect, const Vec c[],const int spp, const int smax, const int width, const int height,std::string fileName = "");
 
-bool readArrFromFile(const int modelSelect, Vec c[], int& spp, const int width, const int height);
+bool readArrFromFile(const int modelSelect, Vec c[], int& spp, int& smax,const int width, const int height, std::string fileName = "");
 
-void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height, float completePercent = 1.0);
+void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height, float completePercent = 1.0, std::string fileName = "");
+
+// save file according to completePercent;
+void fixFile(const int modelSelect, int smax, float completePercent);
+
+// merge two tmpData file and give a pitcutre "unclear.bmp"
+bool mergeFile(const char* file1, const char* file2, const char* outputFile, const int width, const int height,int &smax,float completePercent = 1.0);

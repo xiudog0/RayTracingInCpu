@@ -1,0 +1,88 @@
+newmtl stairscase:stairscase:ceilingLight
+Kd 0 0 0
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:starisLight
+Kd 0 0 0
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:leftTopLight
+Kd 0 0 0
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:leftLight
+Kd 0 0 0
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:backLight
+Kd 0 0 0
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:bottomLight
+Kd 0 0 0
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:Glass
+Kd 0 0 0
+Ks 0.5 0.5 0.5
+Kt 0.8 1 0.95
+Tr 0.8 1 0.95
+Ns 1
+Ni 1.5
+newmtl stairscase:Wood
+Kd 0.5 0.5 0.5
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+map_Kd textures/wood5.jpg
+newmtl stairscase:FloorTiles
+Kd 0.5 0.5 0.5
+Ks 0.2 0.3 0.4
+Tr 1 1 1
+Ns 250
+Ni 1
+map_Kd textures/Tiles.jpg
+newmtl stairscase:Wall
+Kd 0.893289 0.893289 0.893289
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:Wallpaper
+Kd 0.5 0.5 0.5
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+map_Kd textures/Wallpaper.jpg
+newmtl stairscase:SpotHolder
+Kd 1 1 1
+Ks 0 0 0
+Tr 1 1 1
+Ns 1
+Ni 1
+newmtl stairscase:Metal
+Kd 0.2 0.2 0.2
+Ks 0 0.8 0.8
+Tr 1 1 1
+Ns 1000
+Ni 1
+newmtl stairscase:Chrome
+Kd 0.8 0.8 0.6
+Ks 0.8 0.8 0.6
+Tr 1 1 1
+Ns 500
+Ni 1

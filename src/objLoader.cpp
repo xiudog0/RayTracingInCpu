@@ -11,6 +11,9 @@
 #include <iostream>
 #include <algorithm>
 
+
+
+
 bool xmlCameraAndCorrectMaterial(int modelSelect, int& width, int& height, float& fovy, Ray& cam, Vec& camUp, std::vector<tinyobj::material_t>& materials, int detailPrint) {
 
 
@@ -174,30 +177,9 @@ bool loadObj(
 
 	bool triangulate((flags & tinyobj::triangulation) == tinyobj::triangulation);
 
-	for (auto& shape : shapes)
-	{
-		auto& texcoords = shape.mesh.texcoords;
-		for (auto& texcoord : texcoords)
-		{
-
-			while (texcoord > 1.)
-			{
-				texcoord -= 1;
-			}
-
-			while (texcoord < 0.)
-			{
-				texcoord += 1.;
-			}
-		}
-	}
 
 	return printInfo(shapes, materials, triangulate, detailPrint);
 }
-
-
-
-
 
 
 bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vector<Object*>& objects,
@@ -216,36 +198,46 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 			{
 				if (mesh.texcoords.size() / 2 == mesh.positions.size() / 3)
 				{
-					Texture* t = nullptr;
+					Texture* texData = nullptr;
 
+					// texture
 					if (materials[matid].diffuse_texname.size() != 0)
 					{
+						/*
+						printf("  vv0 = (%f, %f,%f),\t", mesh.positions[3 * mesh.indices[3 * f + 0]], mesh.positions[3 * mesh.indices[3 * f + 0] + 1], mesh.positions[3 * mesh.indices[3 * f + 0] + 2]);
+						printf("  vv1 = (%f, %f,%f),\t", mesh.positions[3 * mesh.indices[3 * f + 1]], mesh.positions[3 * mesh.indices[3 * f + 1] + 1], mesh.positions[3 * mesh.indices[3 * f + 1] + 2]);
+						printf("  vv2 = (%f, %f,%f);\n", mesh.positions[3 * mesh.indices[3 * f + 2]], mesh.positions[3 * mesh.indices[3 * f + 2] + 1], mesh.positions[3 * mesh.indices[3 * f + 2] + 2]);
+
+						printf("  v0 = (%10f, %10f)\t", mesh.texcoords[2 * mesh.indices[3 * f + 0] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 0] + 1]);
+						printf("  v1 = (%10f, %10f)\t", mesh.texcoords[2 * mesh.indices[3 * f + 1] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 1] + 1]);
+						printf("  v2 = (%10f, %10f)\n", mesh.texcoords[2 * mesh.indices[3 * f + 2] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 2] + 1]);
+						*/
 						if (tex.find(matid) == tex.end())
 						{
 							int width, height, channels;
 							unsigned char* data = stbi_load(materials[matid].diffuse_texname.c_str(), &width, &height, &channels, 0);
-							t = new Texture{
+							texData = new Texture{
 								width,height,channels,
 								data
 							};
-							tex[matid] = t;
+							tex[matid] = texData;
 						}
 						else
 						{
-							t = tex[matid];
+							texData = tex[matid];
 						}
 					}
-
 
 					objects.push_back(new Triangle(
 						&mesh.positions[3 * mesh.indices[3 * f + 0]],
 						&mesh.positions[3 * mesh.indices[3 * f + 1]],
 						&mesh.positions[3 * mesh.indices[3 * f + 2]],
-						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 0] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 0] + 1]),
-						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 1] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 1] + 1]),
-						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 2] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 2] + 1]),
-						&materials[matid], t
+						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 0] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 0] + 1], 0),
+						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 1] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 1] + 1], 0),
+						Vec(mesh.texcoords[2 * mesh.indices[3 * f + 2] + 0], mesh.texcoords[2 * mesh.indices[3 * f + 2] + 1], 0),
+						&materials[matid], texData
 					));
+
 				}
 				else
 				{
@@ -261,7 +253,7 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 				if (floatMax(materials[matid].emission) != 0 || floatMax(materials[matid].ambient) > 1)
 				{
 					// if obj is bright enough or big erough
-					if (objects.back()->getArea() > 1 || floatMax(objects.back()->material->emission)>20)
+					if (objects.back()->getArea() > 1 || floatMax(objects.back()->material->emission) > 20)
 						lightObjects.push_back(objects.back());
 				}
 			}
@@ -272,6 +264,7 @@ bool transferTinyobjToTriangle(std::vector<tinyobj::shape_t>& shapes, std::vecto
 			objects.push_back(new Sphere(Vec(0.0, 6.5, 2.7), 0.05, &materials[5]));
 			objects.push_back(new Sphere(Vec(0.0, 6.5, 0.0), 0.5, &materials[6]));
 			objects.push_back(new Sphere(Vec(0.0, 6.5, -2.8), 1, &materials[7]));
+
 			lightObjects.push_back(objects[objects.size() - 1]);
 			lightObjects.push_back(objects[objects.size() - 2]);
 			lightObjects.push_back(objects[objects.size() - 3]);
@@ -461,7 +454,7 @@ bool printInfo(const std::vector<tinyobj::shape_t>& shapes, const std::vector<ti
 
 
 
-void writeArrToFile(const int modelSelect, const Vec c[], const int spp, const int width, const int height)
+void writeArrToFile(const int modelSelect, const Vec c[], const int spp, const int smax, const int width, const int height, std::string fileName)
 {
 
 	std::string filename;
@@ -474,19 +467,23 @@ void writeArrToFile(const int modelSelect, const Vec c[], const int spp, const i
 	filename += "H" + std::to_string(height);
 	filename += ".tmpData";
 
+	if (fileName != "")
+		filename = fileName;
+
 	std::ofstream file(filename, std::ios::binary);
 	if (!file) {
 		std::cerr << "can't open" << filename << std::endl;
 		return;
 	}
 	file.write(reinterpret_cast<const char*>(&spp), sizeof(spp));
+	file.write(reinterpret_cast<const char*>(&smax), sizeof(smax));
 	file.write(reinterpret_cast<const char*>(c), width * height * sizeof(Vec));
 	file.close();
 }
 
 
 
-bool readArrFromFile(const int modelSelect, Vec c[], int& spp, const int width, const int height)
+bool readArrFromFile(const int modelSelect, Vec c[], int& spp, int& smax, const int width, const int height, std::string fileName)
 {
 	std::string filename;
 	if (modelSelect == 1) filename = "tmpData/cornell_box";
@@ -499,20 +496,40 @@ bool readArrFromFile(const int modelSelect, Vec c[], int& spp, const int width, 
 	filename += "H" + std::to_string(height);
 	filename += ".tmpData";
 
+	if (fileName != "")
+		filename = fileName;
+
 	std::ifstream file(filename, std::ios::binary);
 	if (!file) {
 		return false;
 	}
+
+	int premax = smax;
+
 	file.read(reinterpret_cast<char*>(&spp), sizeof(spp));
+	file.read(reinterpret_cast<char*>(&premax), sizeof(premax));
 	file.read(reinterpret_cast<char*>(c), width * height * sizeof(Vec));
 	file.close();
+
+
+	if (spp > smax)
+	{
+		std::cout << "warning:finish read spp is" << spp << ", but spp max setting is " << smax
+			<< ", modified to" << premax << std::endl;
+		smax = premax;
+	}
+
+	float recipMax = static_cast<float>(premax) / static_cast<float>(smax);
+
+	for (int i = 0; i < width * height; i++)
+		c[i] = c[i] * recipMax;
 
 	return true;
 }
 
 
 
-void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height,float completePercent) {
+void save_bitmap(const int modelSelect, const Vec c[], const int width, const int height, float completePercent, std::string fileName) {
 
 
 	std::string filename;
@@ -522,6 +539,8 @@ void save_bitmap(const int modelSelect, const Vec c[], const int width, const in
 	else if (modelSelect == 4) filename = "Atest.bmp";
 	else filename = "unclear_image.bmp";
 
+	if (fileName != "")
+		filename = fileName;
 
 	std::ofstream file(filename, std::ios::binary);
 	if (!file) {
@@ -546,15 +565,96 @@ void save_bitmap(const int modelSelect, const Vec c[], const int width, const in
 		bitmap.data[i * 3 + 2] = (toInt(c[i].x * recipCP)) & 0xFF;
 	}
 
-	
+
 
 	file.write(reinterpret_cast<char*>(&bitmap.file_header), sizeof(BitmapFileHeader));
 	file.write(reinterpret_cast<char*>(&bitmap.info_header), sizeof(BitmapInfoHeader));
 	file.write(reinterpret_cast<char*>(bitmap.data), width * height * 3);
 
-
 	std::cout << "  " << filename << " saved!";
 
 	delete[] bitmap.data;
+
+}
+
+void fixFile(const int modelSelect, int smax, float completePercent)
+{
+
+	Vec* c = new Vec[1024 * 1024];
+	int s;
+	readArrFromFile(modelSelect, c, s, smax, 1024, 1024);
+
+	save_bitmap(modelSelect, c, 1024, 1024, completePercent);
+	delete[] c;
+}
+
+bool mergeFile(const char* file1, const char* file2, const char* outputFile, const int width, const  int height, int& smax, float completePercent)
+{
+	Vec* c1 = new Vec[width * height];
+	int s1, s1premax;
+
+
+	std::ifstream fileR(file1, std::ios::binary);
+	if (!fileR) {
+		return false;
+	}
+	int premax;
+
+	fileR.read(reinterpret_cast<char*>(&s1), sizeof(s1));
+	fileR.read(reinterpret_cast<char*>(&s1premax), sizeof(s1premax));
+	fileR.read(reinterpret_cast<char*>(c1), width * height * sizeof(Vec));
+	fileR.close();
+
+
+	Vec* c2 = new Vec[width * height];
+	int s2, s2premax;
+
+	std::ifstream fileR2(file1, std::ios::binary);
+	if (!fileR2) {
+		std::cerr << "can't open" << file1 << std::endl;
+		return false;
+	}
+	fileR2.read(reinterpret_cast<char*>(&s2), sizeof(s2));
+	fileR2.read(reinterpret_cast<char*>(&s2premax), sizeof(s2premax));
+	fileR2.read(reinterpret_cast<char*>(c2), width * height * sizeof(Vec));
+	fileR2.close();
+
+
+	int spp = s1 + s2;
+
+	if (smax < spp)
+	{
+		smax = std::max(s1premax, s2premax);
+		if (smax < spp)
+			smax *= 2;
+		printf("warning: smax is too small to contain two file, now modify to %d\n", smax);
+	}
+
+	if (smax == 0 || spp == 0)
+	{
+		printf("no data to merge\n");
+		return false;
+	}
+	float recipS1Max = static_cast<float>(s1premax) / static_cast<float>(smax);
+	float recipS2Max = static_cast<float>(s2premax) / static_cast<float>(smax);
+
+
+	for (int i = 0; i < width + height; i++)
+		c1[i] = c1[i] * recipS1Max + c2[i] * recipS2Max;
+
+	save_bitmap(-1, c1, width, height, static_cast<float>(spp) / static_cast<float>(smax));
+
+	std::ofstream fileW(outputFile, std::ios::binary);
+	if (!fileW) {
+		std::cerr << "can't open" << outputFile << std::endl;
+		return false;
+	}
+	fileW.write(reinterpret_cast<const char*>(&spp), sizeof(spp));
+	fileW.write(reinterpret_cast<const char*>(&smax), sizeof(smax));
+	fileW.write(reinterpret_cast<const char*>(c1), width * height * sizeof(Vec));
+	fileW.close();
+
+	delete[] c1;
+	delete[] c2;
 
 }

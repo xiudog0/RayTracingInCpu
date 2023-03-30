@@ -107,9 +107,9 @@ bool BVHTree::intersect(const Ray& ray, Intersection& intersection) const {
 			// 如果是叶节点，检查光线是否与对象相交
 			Intersection temp;
 			if (node->object->intersect(ray, temp)) {
-				
+
 				// if two face conplane but temp is a light
-				if (abs(intersection.t - temp.t) < 1e-3&& temp.t) {
+				if (abs(intersection.t - temp.t) < 1e-3 && temp.t) {
 					if (floatMax(temp.material->emission) > floatMax(intersection.material->emission)) {
 						intersection = temp;
 						hit = true;
@@ -117,9 +117,9 @@ bool BVHTree::intersect(const Ray& ray, Intersection& intersection) const {
 					}
 				}
 				// 1e-3 ensure the ray go out a triangle
-				else if (temp.t < intersection.t  && temp.t> 1e-3) {
-						intersection = temp;
-						hit = true;
+				else if (temp.t < intersection.t && temp.t> 1e-3) {
+					intersection = temp;
+					hit = true;
 				}
 			}
 		}
@@ -147,7 +147,7 @@ void BVHTree::depthInfo(BVHNode* root, int depth, int& maxdepth, int& alldepth) 
 	depthInfo(root->left, depth + 1, maxdepth, alldepth);
 	depthInfo(root->right, depth + 1, maxdepth, alldepth);
 
-	if(root->left == nullptr  && root->right == nullptr)
+	if (root->left == nullptr && root->right == nullptr)
 		alldepth += depth;
 	return;
 }
@@ -233,7 +233,7 @@ float Triangle::sampleLight(const Vec& point, const BVHTree& bvh)
 		return 0;
 	//float a = (inte.point - randPoint).length();
 
-	if(	(inte.point - randPoint).length() > 1e-3)
+	if ((inte.point - randPoint).length() > 1e-3)
 		return 0.0f;
 
 
@@ -242,7 +242,7 @@ float Triangle::sampleLight(const Vec& point, const BVHTree& bvh)
 	double area = 0.5 * e01.cross(e02).length();
 	float cos = std::abs(line.normalized().dot(inte.normal));
 
-	return area * cos / distance ;
+	return area * cos / distance;
 }
 
 float Triangle::getArea()
@@ -254,36 +254,40 @@ float Triangle::getArea()
 }
 
 Vec Triangle::getTextureByPoint(const Vec& point)
-{
-	if (texture == nullptr)
-		return Vec(1, 1, 1);
+{	
 
-	Vec e01 = v1 - v0, e02 = v2 - v0, e0p = point - v0;
+	Vec e1 = v1 - v0;
+	Vec e2 = v2 - v0;
+	Vec e3 = v1 - v2;
+	float areaABC = e1.cross(e2).length();
+	float alpha = (e3.cross(point - v2)).length() / areaABC;
+	float beta = (e2.cross(point - v0)).length() / areaABC;
+	float gamma = 1.0 - alpha - beta;
 
-	float d00 = e01.dot(e01);
-	float d01 = e01.dot(e02);
-	float d11 = e02.dot(e02);
-	float d20 = e0p.dot(e01);
-	float d21 = e0p.dot(e02);
-	float denom = d00 * d11 - d01 * d01;
 
-	float w0 = (d11 * d20 - d01 * d21) / denom;
-	float w1 = (d00 * d21 - d01 * d20) / denom;
 
-	float w2 = 1.0f - w0 - w1;
-
-	// 计算纹理坐标
-	float u = w0 * uv0.x + w1 * uv1.x + w2 * uv2.x;
-	float v = w0 * uv0.y + w1 * uv1.y + w2 * uv2.y;
-
-	int w = texture->w;
-	int x = u * w;
-	int y = v * texture->h;
+	float u = alpha * uv0[0] + beta * uv1[0] + gamma * uv2[0];
+	float v = alpha * uv0[1] + beta * uv1[1] + gamma * uv2[1];
 	
+
+	while (u < 0.0f)
+		u++;
+
+	while (v < 0.0f)
+		v++;
+
+	// 计算点point在纹理中的像素坐标
+	int x = static_cast<int>((u * texture->w + 0.5))% texture->w;
+	int y = static_cast<int>((v * texture->h + 0.5))% texture->h;
+
+
+
+	int index = texture->c * (x + y * texture->w);
+
 	return Vec(
-		texture->photo[texture->c * (x + y * w) + 0],
-		texture->photo[texture->c * (x + y * w) + 1],
-		texture->photo[texture->c * (x + y * w) + 2]
+		texture->photo[index + 0],
+		texture->photo[index + 1],
+		texture->photo[index + 2]
 	) * (1.0 / 255.0);
 }
 
@@ -348,7 +352,7 @@ float Sphere::sampleLight(const Vec& point, const BVHTree& bvh)
 	// not hit
 	if (bvh.intersect(Ray(point, (line * -1.).normalized()), inte) == false)
 		return 0;
-	
+
 	if (std::abs((inte.point - center).length() - radius) < 1e-6)
 		return 0;
 
@@ -357,16 +361,16 @@ float Sphere::sampleLight(const Vec& point, const BVHTree& bvh)
 	float area = PI * radius * radius;
 	float cos = line.normalized().dot(inte.normal);
 
-	return area * cos / distance ;
+	return area * cos / distance;
 }
 
 float Sphere::getArea()
 {
-	return 4.0f * PI *radius *radius*radius /3.0f;
+	return 4.0f * PI * radius * radius * radius / 3.0f;
 }
 
 Vec Sphere::getTextureByPoint(const Vec& point)
 {
-	return Vec(1,1,1);
+	return Vec(1, 1, 1);
 }
 

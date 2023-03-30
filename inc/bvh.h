@@ -3,6 +3,9 @@
 #include <cmath>
 #include <vector>
 
+
+
+
 constexpr float PI = 3.1415926;
 inline float floatrand(float max = 1) { return max * static_cast <float> (rand()) / static_cast <float> (RAND_MAX); }
 inline float floatMax(const float f3[]) { return std::max(std::max(f3[0], f3[1]), f3[2]); }
@@ -17,6 +20,7 @@ struct Vec {
 	Vec operator+(const float v[]) const { return Vec(x + v[0], y + v[1], z + v[2]); }
 	Vec operator-(const Vec& v) const { return Vec(x - v.x, y - v.y, z - v.z); }
 	Vec operator*(const float s) const { return Vec(x * s, y * s, z * s); }
+	bool operator==(const Vec& v) const {return (*this - v).length()<1e-1 ? true:false; }
 	float operator[](const int i) const { return i == 0 ? x : (i == 1 ? y : z); }
 
 	float dot(const Vec& v) const { return x * v.x + y * v.y + z * v.z; }
@@ -155,7 +159,6 @@ public:
 
 	virtual objectType getType() override { return objectType::tri; }
 };
-
 
 
 class BVHNode {

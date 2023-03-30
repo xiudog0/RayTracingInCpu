@@ -2,7 +2,9 @@
 #include "objLoader.h"
 
 #include <math.h>
-int DEBUG = 1;
+
+//#define _DEBUG_
+
 /*
 * DONE:
 *	Ka, Kd, Ke, Ks, Ni
@@ -28,6 +30,8 @@ inline Vec sampleAllLight(const Ray& r, const BVHTree& bvh, const std::vector<Ob
 
 inline float caculatePdf(Intersection& intersection, Object* lightObject)
 {
+	if (lightObject->getType() != objectType::sph)
+		return 0;
 
 	float area = lightObject->getArea();
 	float avergEmission = (lightObject->material->emission[0] +
@@ -49,9 +53,10 @@ inline float caculatePdf(Intersection& intersection, Object* lightObject)
 		cos = std::abs((line * -1).normalized().dot(intersection.normal));
 	}
 	float tmp = area * dis * dis * cos * 1e4 * 2;
-	tmp = tmp == 0.0f ? 1e-10 : tmp;
+	tmp = (tmp == 0.0f) ? 1e-10 : tmp;
+	tmp = avergEmission / tmp;
 
-	return clamp(avergEmission / tmp);
+	return tmp < 1e-3 ? 0 : (tmp > 0.99999) ? 1.000001 : tmp;
 }
 
 
@@ -114,7 +119,7 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 
 		if (cos2t < 0)
 		{
-			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects).mult(specular);
+			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects).mult(transmittance);
 		}
 
 		Vec transDir = (r.direction * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t)))).normalized();
@@ -122,17 +127,17 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		float fresnel = R0 + (1 - R0) * c * c * c * c * c;
 		float transmitProbability = 1 - fresnel;
 
-		float TransmitProb = 1 - fresnel, P = .25 + .5 * fresnel, RP = fresnel / P, TP = TransmitProb / (1 - P);
+		// Probablity
+		float  P = .25 + .5 * fresnel, RP = fresnel / P, TP = transmitProbability / (1 - P);
 
-		if (floatrand() < TransmitProb)
+		if (floatrand() < transmitProbability)
 		{
 			float recipTransProb = (transmitProbability != 0.0f ? 1. / transmitProbability : 1e-6);
 			return ret + radiance(Ray(intersection.point, transDir), depth, bvh, lightObjects).mult(transmittance) * TP;
 		}
 		else
 		{
-			float recipReflectProb = (fresnel != 0.0f ? 1. / fresnel : 1e-6);
-			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects).mult(specular) * RP;
+			return ret + radiance(Ray(intersection.point, refelDir), depth, bvh, lightObjects).mult(transmittance) * RP;
 		}
 	}
 
@@ -143,8 +148,8 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		auto  texture = intersection.object->getTextureByPoint(intersection.point);
 		diffuse = diffuse.mult(texture);
 	}
-	float diffuseProbability = diffuseMax / (diffuseMax + specularMax);
 
+	float diffuseProbability = diffuseMax / (diffuseMax + specularMax);
 	if (specularMax == 0 || floatrand() < diffuseProbability)
 	{
 
@@ -157,21 +162,22 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		float phi = PI * floatrand(0.5);
 		float sinphi = std::sin(phi);
 		// a random reflection ray
+
 		Vec randDir = u * std::cos(theta) * sinphi + v * std::sin(theta) * sinphi + w * std::cos(phi);
 		float recipDiffProb = (diffuseProbability != 0.0f ? 1. / diffuseProbability : 0.);
-		ret = ret + radiance(Ray(intersection.point, randDir), depth, bvh, lightObjects).mult(diffuse) * recipDiffProb;
-
+		return ret + radiance(Ray(intersection.point, randDir), depth, bvh, lightObjects).mult(diffuse) * recipDiffProb;
 	}
 	else
 	{
 		// specular
 		int lightObj = rand() % lightObjects.size();
 		// probality of Sample this light
+
 		float pdf = 0;
-		/*
-		pdf = caculatePdf(intersection, lightObjects[lightObj]);
-		ret = ret + sampleAllLight(Ray(intersection.point,intersection.direction), bvh, lightObjects)*pdf;
-		*/
+		//caculatePdf(intersection, lightObjects[lightObj]);
+		if (pdf != 0 && floatrand(0.999) < pdf) {
+			return  ret + sampleAllLight(Ray(intersection.point, intersection.normal), bvh, lightObjects) * (1.0f / pdf);
+		}
 		// perpendicular to each other
 		Vec refelRandDir;
 		//Bsdf
@@ -179,18 +185,18 @@ Vec radiance(const Ray& r, int depth, BVHTree& bvh, std::vector<Object*>& lightO
 		Vec v = refelDir.cross(u).normalized();
 		float theta = floatrand(2) * PI;
 		refelRandDir = (refelDir + (u * std::cos(theta) + v * std::sin(theta)) * floatrand(0.2)).normalized();
-		float recipSpecProb = 1.0 / (1.0 - diffuseProbability);
+		float recipSpecProb = 1.0f / ((1.0f - diffuseProbability) * (1 - pdf));
 		Vec radi = radiance(Ray(intersection.point, refelRandDir), depth, bvh, lightObjects) * recipSpecProb;
 		// if(1.0f - pdf >1e-6)
-		ret = ret + radi.mult(specular) * std::pow(refelRandDir.dot(refelDir), shininess);
+		return  ret + radi.mult(specular) * std::pow(refelRandDir.dot(refelDir), shininess);
+
+
 	}
-	return ret;
 }
 
 
 
 int main(int argc, char* argv[]) {
-
 	int w, h;
 	float fovy;
 	Ray cam;
@@ -206,9 +212,10 @@ int main(int argc, char* argv[]) {
 	int samps = (argc == 2 ? atoi(argv[1]) : 1);
 
 	// --------------------------------debug setting-------------------------------------
+
 	modelSelect = 3;
 	detailPrint = 1;
-	samps = 1024;
+	samps = 4096;
 
 	if (!objLoader(modelSelect, shapes, materials, detailPrint) ||
 		!xmlCameraAndCorrectMaterial(modelSelect, w, h, fovy, cam, camUp, materials, detailPrint))
@@ -217,6 +224,9 @@ int main(int argc, char* argv[]) {
 	std::vector<Object*> objects;
 	std::vector<Object*> lightObjects;
 	transferTinyobjToTriangle(shapes, objects, lightObjects, materials, detailPrint);
+
+
+
 	BVHTree bvh{ objects };
 	if (detailPrint)
 	{
@@ -225,10 +235,10 @@ int main(int argc, char* argv[]) {
 		printf("dfs object num : %zd, max depth:%d, average depth:%f\n\n",
 			objects.size(), maxdepth, static_cast<float>(alldepth) / static_cast<float>(objects.size()));
 	}
-	objects.resize(0);
-	w /= 16;
-	h /= 16;
-
+#ifdef _DEBUG_
+	w /= 4;
+	h /= 4;
+#endif // DEBUF_
 	// xyz increment;
 	Vec cyIncure, cxIncure, czIncure;
 	{
@@ -244,88 +254,102 @@ int main(int argc, char* argv[]) {
 	}
 
 	Vec* c = new Vec[w * h];
-	float spp = 1 * samps;
+	int spp = 1 * samps;
 	float recipSpp = 1.0 / spp;
 
 	int s = 1;
 
-	//srand(0);
+#ifdef _DEBUG_
+	srand(0);
 	if (0)
-		if (readArrFromFile(modelSelect, c, s, w, h))
+#endif // _DEBUG_
+		if (readArrFromFile(modelSelect, c, s, spp, w, h))
 			printf("Rendering begin with read data file! now spp: %d \n", s);
 		else
 			printf("Rendering begin!!!! \n");
 
-	DEBUG = 0;
-	int xmin = 0, xmax = w, ymin = 0, ymax = h;
-	if (DEBUG) {
+#define CUTPHOTO 1 // --------------------------------------------------------------------
+
+#ifdef _DEBUG_
+	int xmin = 0, xmax = w - 1, ymin = 0, ymax = h - 1;
+	if (CUTPHOTO) {
 		/*
 		xmin = w / 2 - w / 16;
 		xmax = w / 2 + w / 16;
 		*/
 
-		xmin = w / 2;
-		xmax = w / 2 + w / 4;
-		ymax = h / 4;
+		xmin = w / 4;
+		xmax = w / 2;
+		//ymin = 1;
+		ymax = h / 2;
+
+		int a = 1;
+		for (int y = ymin; y < ymax; y++)
+		{
+			if (xmin > 0)
+				c[y * w + xmin - 1].x = 10.0f;
+			if (xmax < w - 1)
+				c[y * w + xmax + 1].x = 10.0f;
+		}
+		for (int x = xmin; x < xmax; x++)
+		{
+			if (ymin > 0)
+				c[(ymin - 1) * w + x].x = 10.0f;
+			if (ymax < w - 1)
+				c[(ymax + 1) * w + x].x = 10.0f;
+		}
 	}
+
+	printf("DEBUG Rendring begin ,x:(%d-%d), y(%d-%d),w: %d,h: %d\n", xmin, xmax, ymin, ymax, w, h);
+#endif //DEBUF_
+
 
 	for (s; s <= samps; s++) {
 		if (s % 4 == 0) {
-			printf("Rendering (%.0f spp) %5.2f%%", spp, 100. * s / (samps));
+			printf("Rendering (%d spp) %5.2f%%", spp, 100. * s / (samps));
 			// save file  per 16 spp;
 			if (s % 16 == 0) {
-				writeArrToFile(modelSelect, c, s, w, h);
-				save_bitmap(modelSelect, c, w, h,static_cast<float>(s)/ static_cast<float>(samps));
+#ifdef _DEBUG_
+				if (0)
+#endif // _DEBUG_
+					writeArrToFile(modelSelect, c, s, spp, w, h);
+				save_bitmap(modelSelect, c, w, h, static_cast<float>(s) / static_cast<float>(samps));
 			}
 			printf("\n");
 		}
-		//#pragma omp parallel for
-		for (int y = 0; y < h; y++) {
-			/*
-			if (s != 0) {
-				if (y > ymax)
-					break;
-			}
-			*/
-			for (int x = 0; x < w; x++) {
-				/*
-				if (s != 1) {
-					if (x < xmin)
-						x = xmin;
-					else if (x > xmax)
-						break;
-				}
-				
-				
-				if ((x != 205 || y != h - 145 - 1))
-				{
-					int a = 0;
-				}
-				if (s == 165)
-				{
-					int a = 0;
-				}
-				*/
-				float r1 = floatrand(2);
-				float r2 = floatrand(2);
-				float dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
-				float dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
-				Vec d = cxIncure * ((dx + .5) / 2 + x - w / 2) +
-					cyIncure * ((dy + .5) / 2 + y - h / 2) + czIncure;
-				Vec r;
-				r = r + radiance(Ray(cam.origin + d, d.normalized()), 0, bvh, lightObjects);
+#pragma omp parallel for
+#ifdef _DEBUG_
+		for (int y = ymin; y < h; y++) {
 
+			if (y > ymax)
+				continue;
+#else
+		for (int y = 0; y < h; y++) {
+#endif //_DEBUG_
+			for (int x = 0; x < w; x++) {
+#ifdef _DEBUG_
+				if (x < xmin)
+					continue;
+				else if (x > xmax)
+					continue;
+#endif //_DEBUG_
+				float r1 = floatrand(1) - 0.5;
+				float r2 = floatrand(1) - 0.5;
+				Vec d = cxIncure * (r1 + x - w / 2) +
+					cyIncure * (r2 + y - h / 2) + czIncure;
+				Vec r = radiance(Ray(cam.origin + d, d.normalized()), 0, bvh, lightObjects);
+				c[y * w + x] = c[y * w + x] + r * recipSpp;
+#ifdef _DEBUG_
 				if (std::fpclassify(r.x) > 0 || std::fpclassify(r.y) > 0 || std::fpclassify(r.z) > 0)
 				{
-					printf("go wrong spp:%d, %7f %7f %7f------\n", s, r.x, r.y, r.z);
+					printf("computer wrong answer!x:%d, y%d, spp:%d, %7f %7f %7f------\n", x, y, s, r.x, r.y, r.z);
 				}
-
-				c[y * w + x] = c[y * w + x]  + r*recipSpp;
+#endif // _DEBUG_
 			}
 		}
-	}
+		}
 
-	/*
+#ifdef _DEBUG_
 	float cmax = -1e10;
 	float cmin = 1e10;
 	for (int y = 0; y < w; y++) {
@@ -340,8 +364,8 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	printf("min:%7f------max:%7f \n", cmin, cmax);
-	*/
-	save_bitmap(modelSelect, c, w, h);
+#endif //_DEBUG_
 
+	save_bitmap(modelSelect, c, w, h);
 	return 0;
-}
+		}
